@@ -138,7 +138,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="goBack(1)"><i class="bi bi-arrow-right me-1"></i>رجوع</button>
                 <h5 class="fw-bold mb-3 text-success"><i class="bi bi-2-circle-fill me-2"></i>اختر التاريخ والتوقيت:</h5>
                 <label class="form-label fw-bold" for="booking-date">تاريخ الحضور:</label>
-                <input type="date" id="booking-date" class="form-control mb-4" onchange="generateSlots()">
+                <input type="date" id="booking-date" class="form-control mb-4" lang="en-GB" dir="ltr" onchange="generateSlots()">
                 <label class="form-label fw-bold">المواعيد المتاحة (من 09:00 ص إلى 01:30 ظ):</label>
                 <div id="slots-container" class="row g-2 mb-4"></div>
             </div>
@@ -181,9 +181,9 @@
                         <p class="mb-2"><strong>اسم المواطن:</strong> <span id="ticket-name"></span></p>
                         <p class="mb-2"><strong>الرقم القومي:</strong> <span id="ticket-id"></span></p>
                         <p class="mb-2"><strong>الخدمة:</strong> <span id="ticket-service"></span></p>
-                        <p class="mb-2"><strong>التاريخ:</strong> <span id="ticket-date"></span></p>
+                        <p class="mb-2"><strong>التاريخ:</strong> <span id="ticket-weekday"></span> <span id="ticket-date" dir="ltr" class="d-inline-block"></span></p>
                         <p class="mb-2"><strong>توقيت الحضور:</strong> <span id="ticket-time" class="badge bg-success fs-6"></span></p>
-                        <p class="mb-0"><strong>وقت تسجيل الحجز:</strong> <span id="ticket-registered"></span></p>
+                        <p class="mb-0"><strong>وقت تسجيل الحجز:</strong> <span id="ticket-registered" dir="ltr" class="d-inline-block"></span></p>
                     </div>
                     <div id="qrcode" class="my-3"></div>
                     <p class="small text-muted mb-3 d-print-none">امسح رمز QR لعرض هذه التذكرة</p>
@@ -260,6 +260,24 @@
             const bin = atob(s);
             const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
             return new TextDecoder().decode(bytes);
+        }
+
+        /* ---------- تنسيق التاريخ للعرض فقط (يوم/شهر/سنة) ---------- */
+        function fmtDate(iso) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+            return m ? (m[3] + '/' + m[2] + '/' + m[1]) : (iso || '');
+        }
+
+        function fmtStamp(ts) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})$/.exec(ts || '');
+            return m ? (m[3] + '/' + m[2] + '/' + m[1] + ' - ' + m[4]) : (ts || '');
+        }
+
+        function weekdayAr(iso) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+            if (!m) return '';
+            const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+            return new Intl.DateTimeFormat('ar-EG', { weekday: 'long', timeZone: 'UTC' }).format(d);
         }
 
         /* ---------- خطوات الحجز ---------- */
@@ -439,9 +457,10 @@
             document.getElementById('ticket-name').innerText = t.name;
             document.getElementById('ticket-id').innerText = t.nationalId;
             document.getElementById('ticket-service').innerText = t.service;
-            document.getElementById('ticket-date').innerText = t.date;
+            document.getElementById('ticket-weekday').innerText = weekdayAr(t.date);
+            document.getElementById('ticket-date').innerText = fmtDate(t.date);
             document.getElementById('ticket-time').innerText = t.time;
-            document.getElementById('ticket-registered').innerText = t.registered;
+            document.getElementById('ticket-registered').innerText = fmtStamp(t.registered);
 
             document.getElementById('step-1').classList.add('d-none');
             document.getElementById('step-2').classList.add('d-none');
