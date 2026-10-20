@@ -8,6 +8,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- تطبيق الوضع المحفوظ (فاتح/داكن) قبل رسم الصفحة لمنع الوميض -->
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('theme'); } catch (e) {}
+            if (t !== 'dark' && t !== 'light') {
+                t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-bs-theme', t);
+        })();
+    </script>
     <style>
         :root {
             --primary-emerald: #0f5132;
@@ -15,7 +26,11 @@
             --light-emerald: #e8f5e9;
             --bg-light: #f8f9fa;
         }
-        body { font-family: 'Tajawal', sans-serif; background-color: var(--bg-light); color: #212529; }
+        [data-bs-theme="dark"] {
+            --light-emerald: #17382a;
+            --bg-light: #101614;
+        }
+        body { font-family: 'Tajawal', sans-serif; background-color: var(--bg-light); color: var(--bs-body-color); }
         
         /* تصغير وتجميل الشريط الأخضر العلوي */
         .hero-header { 
@@ -24,6 +39,7 @@
             border-radius: 0 0 20px 20px; 
             padding: 15px 20px; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+            position: relative;
         }
         
         .ministry-logo {
@@ -36,20 +52,57 @@
             object-fit: contain;
         }
 
+        /* زر الوضع الفاتح/الداكن */
+        .theme-toggle {
+            position: absolute;
+            top: 10px;
+            inset-inline-end: 12px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.6);
+            background: rgba(255,255,255,0.15);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .theme-toggle:hover { background: rgba(255,255,255,0.3); }
+
         .card-service { border: 2px solid #e0e0e0; transition: all 0.3s ease; cursor: pointer; border-radius: 15px; }
         .card-service:hover, .card-service.selected { border-color: var(--primary-emerald); background-color: var(--light-emerald); transform: translateY(-3px); }
         .time-slot { border: 1.5px solid var(--secondary-emerald); color: var(--primary-emerald); font-weight: 600; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; }
         .time-slot:hover, .time-slot.selected { background-color: var(--primary-emerald); color: white; }
-        .ticket-card { border: 2px dashed var(--primary-emerald); border-radius: 20px; background: white; padding: 25px; }
+        .ticket-card { border: 2px dashed var(--primary-emerald); border-radius: 20px; background: var(--bs-body-bg); padding: 25px; }
         .btn-emerald { background-color: var(--primary-emerald); color: white; font-weight: bold; border-radius: 10px; }
         .btn-emerald:hover { background-color: #0b3d26; color: white; }
         .btn-emerald:disabled { background-color: var(--primary-emerald); color: white; opacity: 0.7; cursor: not-allowed; }
         #booking-message:focus { outline: none; }
+
+        /* خلفية بيضاء حول الـ QR ليظل قابلاً للمسح في الوضع الداكن */
+        #qrcode { background: #fff; padding: 10px; border-radius: 10px; width: fit-content; margin-inline: auto; }
+
+        /* تعديلات الوضع الداكن */
+        [data-bs-theme="dark"] .card-service { border-color: #3a4440; }
+        [data-bs-theme="dark"] .card-service:hover { border-color: #2f9e6a; }
+        [data-bs-theme="dark"] .time-slot { color: #7ddfae; border-color: #2f9e6a; }
+        [data-bs-theme="dark"] .time-slot:hover, [data-bs-theme="dark"] .time-slot.selected { background-color: var(--secondary-emerald); color: #fff; }
+        [data-bs-theme="dark"] .ticket-card { border-color: #2f9e6a; }
+        [data-bs-theme="dark"] .text-success { color: #5fd39a !important; }
+        [data-bs-theme="dark"] .btn-outline-dark {
+            --bs-btn-color: #f8f9fa; --bs-btn-border-color: #f8f9fa;
+            --bs-btn-hover-color: #212529; --bs-btn-hover-bg: #f8f9fa; --bs-btn-hover-border-color: #f8f9fa;
+        }
     </style>
 </head>
 <body>
     <!-- الشريط الأخضر المدمج والصغير -->
     <div class="hero-header mb-4">
+        <button id="theme-toggle" type="button" class="theme-toggle d-print-none" onclick="toggleTheme()" aria-label="التبديل إلى الوضع الداكن" title="تبديل الوضع">
+            <i id="theme-icon" class="bi bi-moon-stars-fill" aria-hidden="true"></i>
+        </button>
         <div class="container d-flex align-items-center justify-content-center text-center text-md-start gap-3" style="max-width: 800px;">
             <img src="logo.png" alt="شعار محكمة الإسكندرية الاقتصادية" class="ministry-logo flex-shrink-0">
             <div>
@@ -64,6 +117,9 @@
 
     <div class="container mb-5" style="max-width: 800px;">
         <div class="card shadow-sm border-0 rounded-4 p-4">
+            <!-- رسالة خطأ عند فتح تذكرة غير صالحة من رمز QR -->
+            <div id="ticket-error" class="alert alert-danger d-none" role="alert"></div>
+
             <!-- الخطوة 1: اختيار الخدمة -->
             <div id="step-1">
                 <h5 class="fw-bold mb-3 text-success"><i class="bi bi-1-circle-fill me-2"></i>اختر الخدمة المطلوبة:</h5>
@@ -79,6 +135,7 @@
 
             <!-- الخطوة 2: اختيار التاريخ والوقت -->
             <div id="step-2" class="d-none">
+                <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="goBack(1)"><i class="bi bi-arrow-right me-1"></i>رجوع</button>
                 <h5 class="fw-bold mb-3 text-success"><i class="bi bi-2-circle-fill me-2"></i>اختر التاريخ والتوقيت:</h5>
                 <label class="form-label fw-bold" for="booking-date">تاريخ الحضور:</label>
                 <input type="date" id="booking-date" class="form-control mb-4" onchange="generateSlots()">
@@ -88,6 +145,7 @@
 
             <!-- الخطوة 3: بيانات المواطن -->
             <div id="step-3" class="d-none">
+                <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="goBack(2)"><i class="bi bi-arrow-right me-1"></i>رجوع</button>
                 <h5 class="fw-bold mb-3 text-success"><i class="bi bi-3-circle-fill me-2"></i>بيانات المواطن:</h5>
                 <div class="mb-3">
                     <label class="form-label fw-bold" for="citizen-name">الاسم الرباعي:</label>
@@ -112,14 +170,14 @@
                 <button id="confirm-btn" type="button" class="btn btn-emerald w-100 py-2 mt-2" onclick="confirmBooking()">تأكيد الحجز وإصدار التذكرة</button>
             </div>
 
-            <!-- الخطوة 4: تذكرة الحجز -->
+            <!-- الخطوة 4: تذكرة الحجز (بدون زر رجوع) -->
             <div id="step-4" class="d-none">
                 <div class="ticket-card text-center">
                     <img src="logo.png" alt="شعار محكمة الإسكندرية الاقتصادية" style="width: 90px; height: 90px; object-fit: contain;" class="mb-2">
-                    <p class="fw-bold text-dark mb-1">جمهورية مصر العربية - وزارة العدل</p>
+                    <p class="fw-bold text-body mb-1">جمهورية مصر العربية - وزارة العدل</p>
                     <span class="badge bg-success mb-3 p-2 px-3 fs-6" role="status">✔ تم الحجز بنجاح</span>
                     <h4 class="fw-bold text-success mb-3" id="ticket-heading" tabindex="-1">تذكرة حجز مواطن (منصة تسهيل)</h4>
-                    <div class="text-start p-3 bg-light rounded-3 mb-3 fs-6">
+                    <div class="text-start p-3 bg-body-tertiary rounded-3 mb-3 fs-6">
                         <p class="mb-2"><strong>اسم المواطن:</strong> <span id="ticket-name"></span></p>
                         <p class="mb-2"><strong>الرقم القومي:</strong> <span id="ticket-id"></span></p>
                         <p class="mb-2"><strong>الخدمة:</strong> <span id="ticket-service"></span></p>
@@ -127,8 +185,9 @@
                         <p class="mb-2"><strong>توقيت الحضور:</strong> <span id="ticket-time" class="badge bg-success fs-6"></span></p>
                         <p class="mb-0"><strong>وقت تسجيل الحجز:</strong> <span id="ticket-registered"></span></p>
                     </div>
-                    <div id="qrcode" class="d-flex justify-content-center my-3"></div>
-                    <button class="btn btn-outline-dark w-100" onclick="window.print()"><i class="bi bi-printer me-2"></i>طباعة التذكرة</button>
+                    <div id="qrcode" class="my-3"></div>
+                    <p class="small text-muted mb-3 d-print-none">امسح رمز QR لعرض هذه التذكرة</p>
+                    <button class="btn btn-outline-dark w-100 d-print-none" onclick="window.print()"><i class="bi bi-printer me-2"></i>طباعة التذكرة</button>
                 </div>
             </div>
         </div>
@@ -147,6 +206,35 @@
         let selectedService = '', serviceDuration = 0, selectedTime = '';
         let isSubmitting = false;
 
+        /* ---------- الوضع الفاتح / الداكن ---------- */
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-bs-theme', theme);
+            const icon = document.getElementById('theme-icon');
+            const btn = document.getElementById('theme-toggle');
+            const toDark = theme !== 'dark';
+            icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+            btn.setAttribute('aria-label', toDark ? 'التبديل إلى الوضع الداكن' : 'التبديل إلى الوضع الفاتح');
+            btn.title = toDark ? 'الوضع الداكن' : 'الوضع الفاتح';
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-bs-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            try { localStorage.setItem('theme', next); } catch (e) {}
+        }
+
+        // الطباعة دائماً بالوضع الفاتح
+        let themeBeforePrint = null;
+        window.addEventListener('beforeprint', function () {
+            themeBeforePrint = document.documentElement.getAttribute('data-bs-theme');
+            document.documentElement.setAttribute('data-bs-theme', 'light');
+        });
+        window.addEventListener('afterprint', function () {
+            if (themeBeforePrint) document.documentElement.setAttribute('data-bs-theme', themeBeforePrint);
+        });
+
+        /* ---------- أدوات مساعدة ---------- */
         function localDateString() {
             const d = new Date();
             const pad = n => (n < 10 ? '0' : '') + n;
@@ -159,11 +247,30 @@
                 .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0));
         }
 
+        function b64urlEncode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let bin = '';
+            bytes.forEach(b => { bin += String.fromCharCode(b); });
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        function b64urlDecode(s) {
+            s = s.replace(/-/g, '+').replace(/_/g, '/');
+            while (s.length % 4) s += '=';
+            const bin = atob(s);
+            const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        }
+
+        /* ---------- خطوات الحجز ---------- */
         function selectService(name, duration) {
-            selectedService = name; serviceDuration = duration;
+            selectedService = name; serviceDuration = duration; selectedTime = '';
             document.getElementById('step-1').classList.add('d-none');
             document.getElementById('step-2').classList.remove('d-none');
-            document.getElementById('booking-date').min = localDateString();
+            const dateInput = document.getElementById('booking-date');
+            dateInput.min = localDateString();
+            // لو رجع المستخدم واختار خدمة أخرى، نحدّث المواعيد حسب مدة الخدمة الجديدة
+            if (dateInput.value) generateSlots(); else document.getElementById('slots-container').innerHTML = '';
         }
 
         function generateSlots() {
@@ -189,6 +296,22 @@
             selectedTime = time;
             document.getElementById('step-2').classList.add('d-none');
             document.getElementById('step-3').classList.remove('d-none');
+        }
+
+        /* ---------- زر الرجوع (للخطوتين 2 و 3 فقط) ---------- */
+        function goBack(toStep) {
+            if (isSubmitting) return;
+            clearMessage();
+            document.getElementById('step-2').classList.add('d-none');
+            document.getElementById('step-3').classList.add('d-none');
+            if (toStep === 1) {
+                selectedService = ''; serviceDuration = 0; selectedTime = '';
+                document.getElementById('step-1').classList.remove('d-none');
+            } else if (toStep === 2) {
+                selectedTime = '';
+                document.getElementById('step-2').classList.remove('d-none');
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         /* ---------- رسائل الحالة ---------- */
@@ -294,7 +417,15 @@
             clearTimeout(timer);
 
             if (result && result.ok === true) {
-                showTicket(payload, result.booking || {});
+                const b = result.booking || {};
+                renderTicket({
+                    name: payload.name,
+                    nationalId: payload.nationalId,
+                    service: payload.service,
+                    date: b.date || payload.date,
+                    time: b.time || payload.time,
+                    registered: b.timestamp || ''
+                });
                 return; // يبقى الزر معطلاً لأن الخطوة أُخفيت
             }
 
@@ -303,24 +434,51 @@
             showMessage('danger', msg, result && result.code === 'SLOT_TAKEN');
         }
 
-        function showTicket(payload, booking) {
-            document.getElementById('ticket-name').innerText = payload.name;
-            document.getElementById('ticket-id').innerText = payload.nationalId;
-            document.getElementById('ticket-service').innerText = payload.service;
-            document.getElementById('ticket-date').innerText = booking.date || payload.date;
-            document.getElementById('ticket-time').innerText = booking.time || payload.time;
-            document.getElementById('ticket-registered').innerText = booking.timestamp || '';
+        /* ---------- عرض التذكرة + رمز QR (يفتح التذكرة نفسها عند المسح) ---------- */
+        function renderTicket(t) {
+            document.getElementById('ticket-name').innerText = t.name;
+            document.getElementById('ticket-id').innerText = t.nationalId;
+            document.getElementById('ticket-service').innerText = t.service;
+            document.getElementById('ticket-date').innerText = t.date;
+            document.getElementById('ticket-time').innerText = t.time;
+            document.getElementById('ticket-registered').innerText = t.registered;
 
+            document.getElementById('step-1').classList.add('d-none');
+            document.getElementById('step-2').classList.add('d-none');
             document.getElementById('step-3').classList.add('d-none');
             document.getElementById('step-4').classList.remove('d-none');
 
+            // رابط الصفحة نفسها + بيانات التذكرة، فيفتح الـ QR التذكرة مباشرة
+            const data = [t.name, t.nationalId, t.service, t.date, t.time, t.registered];
+            const base = location.href.split('#')[0].split('?')[0];
+            const ticketUrl = base + '?t=' + b64urlEncode(JSON.stringify(data));
+
             const qr = document.getElementById('qrcode');
             qr.innerHTML = '';
-            new QRCode(qr, { text: `MOJ|TASHEEL|${payload.nationalId}|${booking.time || payload.time}`, width: 120, height: 120 });
+            new QRCode(qr, { text: ticketUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L });
 
             document.getElementById('ticket-heading').focus();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+
+        /* ---------- فتح التذكرة عند مسح الـ QR ---------- */
+        function openTicketFromUrl() {
+            const param = new URLSearchParams(location.search).get('t');
+            if (!param) return;
+            try {
+                const d = JSON.parse(b64urlDecode(param));
+                if (!Array.isArray(d) || d.length < 6 || d.slice(0, 6).some(v => typeof v !== 'string')) throw new Error('bad');
+                renderTicket({ name: d[0], nationalId: d[1], service: d[2], date: d[3], time: d[4], registered: d[5] });
+            } catch (e) {
+                document.getElementById('step-1').classList.add('d-none');
+                const err = document.getElementById('ticket-error');
+                err.textContent = 'رابط التذكرة غير صالح أو غير مكتمل.';
+                err.classList.remove('d-none');
+            }
+        }
+
+        applyTheme(document.documentElement.getAttribute('data-bs-theme'));
+        openTicketFromUrl();
     </script>
 </body>
 </html>
